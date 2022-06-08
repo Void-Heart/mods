@@ -10,12 +10,19 @@ class Mod:
         self.texture_sys = texture_sys
         self.objects_on_screen = []
         self.blacklisted_game_objects = []
+        self.locked_state = False
+        self.active_telaportal = False
+        self.telaportal_buildup = []
         self.game_objects_detailed = [
             ['platform', 'home', 'test_platform'],
             ['switch', 'lvl2', 'switch', 'lvl2', 'switch_pushed'],
             ['player', 'lvl', 'player'],
-            ['portal', 'lvl', 'portal']
+            ['portal', 'lvl', 'portal'],
+            ['telaportal', 'lvl', 'telaportal']
         ]
+        self.second_telaportal_tex = self.texture_sys.get_texture('lvl', 'telaportal2')
+        self.second_telaportal_tex_nd = self.texture_sys.get_texture('lvl', 'telaportal2').convert_alpha()
+        self.second_telaportal_tex_nd.set_alpha(127)
         self.game_objects = []
         for object in self.game_objects_detailed:
             self.game_objects.append([self.texture_sys.get_texture(object[1], object[2]), object[0]])
@@ -38,21 +45,35 @@ class Mod:
     def manage_clicks(self):
         mouse_pressed = self.pygame.mouse.get_pressed()
         mouse_pos = self.room_renderer.get_mouse_pos()
-        if mouse_pressed[2] and not self.mouse_pressed_pf[2]:
+        if mouse_pressed[2] and not self.mouse_pressed_pf[2] and not self.locked_state:
             if len(self.game_objects)-1 == self.current_game_object:
                 self.current_game_object = 0
             else:
                 self.current_game_object += 1
         if mouse_pressed[0] and not self.mouse_pressed_pf[0]:
             if not self.current_game_object in self.blacklisted_game_objects:
-                self.objects_on_screen.append([self.current_game_object, mouse_pos])
+                if not self.current_game_object == 4:
+                    self.objects_on_screen.append([self.current_game_object, mouse_pos])
                 if self.current_game_object == 2:
                     self.blacklisted_game_objects.append(self.current_game_object)
+                if self.current_game_object == 4:
+                    self.locked_state = True
+                    self.active_telaportal = True
+                    self.telaportal_buildup.append(mouse_pos)
+                    if len(self.telaportal_buildup) == 2:
+                        self.objects_on_screen.append([self.current_game_object]+self.telaportal_buildup)
+                        self.locked_state = False
+                        self.active_telaportal = False
         self.mouse_pressed_pf = mouse_pressed
     def draw_current_game_object(self):
+        if self.active_telaportal:
+            self.display.blit(self.second_telaportal_tex_nd, self.room_renderer.get_mouse_pos())
         self.display.blit(self.game_objects_not_drawn[self.current_game_object][0], self.room_renderer.get_mouse_pos())
     def draw_all_objects(self):
         for object in self.objects_on_screen:
+            if object[0] == 4:
+                self.display.blit(self.game_objects[object[0]][0], object[1])
+                self.display.blit(self.second_telaportal_tex, object[2])
             self.display.blit(self.game_objects[object[0]][0], object[1])
     def tick(self):
         self.manage_keydowns()
@@ -74,6 +95,8 @@ class Mod:
                 code_lines.append('self.switch({}, {}, self.texture_sys.get_texture({}, {}), self.texture_sys.get_texture({}, {}), {})'.format(doi[5][0], doi[5][0], doi[1], doi[2], doi[3], doi[4], str(uuid.uuid4())))
             if doi[0] == 'portal':
                 code_lines.append("self.portal({}, {}, '(NEXT LEVEL)')".format(doi[3][0], doi[3][1]))
+            if doi[0] == 'telaportal':
+                code_lines.append('self.telaportal({}, {}, {}, {})'.format(doi[3][0], doi[3][1], doi[4][0], doi[4][1]))
         code_lines = '\n'.join(code_lines)
         return code_lines
     def close(self):
